@@ -22,21 +22,43 @@
             {{ error }}
           </div>
           
+          <div class="filters mb-4">
+            <div class="row">
+              <div class="col-md-4">
+                <div class="input-group">
+                  <span class="input-group-text"><i class="bi bi-search"></i></span>
+                  <input type="text" class="form-control" placeholder="Search orders..." 
+                         [(ngModel)]="searchTerm" (ngModelChange)="applyFilters()">
+                </div>
+              </div>
+              <div class="col-md-4">
+                <select class="form-select" [(ngModel)]="statusFilter" (ngModelChange)="applyFilters()">
+                  <option value="ALL">All Status</option>
+                  <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
+                </select>
+              </div>
+              <div class="col-md-4 text-end">
+                <button class="btn btn-outline-secondary" (click)="loadOrders()">
+                  <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+                </button>
+              </div>
+            </div>
+          </div>
+          
           <div *ngIf="!loading && !error" class="table-responsive">
             <table class="table table-hover align-middle border-light">
               <thead class="bg-dark text-white">
                 <tr>
-                  <th scope="col" class="header-cell">ORDER ID</th>
-                  <th scope="col" class="header-cell"><i class="bi bi-calendar-event me-1"></i> DATE</th>
+                  <th scope="col" class="header-cell"><i class="bi bi-hash me-1"></i> ORDER ID</th>
+                  <th scope="col" class="header-cell"><i class="bi bi-calendar me-1"></i> DATE</th>
                   <th scope="col" class="header-cell"><i class="bi bi-person me-1"></i> CUSTOMER</th>
-                  <th scope="col" class="header-cell"><i class="bi bi-cash-coin me-1"></i> AMOUNT</th>
-                  <th scope="col" class="header-cell"><i class="bi bi-truck me-1"></i> STATUS</th>
-                  <th scope="col" class="header-cell"><i class="bi bi-credit-card me-1"></i> PAYMENT</th>
+                  <th scope="col" class="header-cell"><i class="bi bi-cash-stack me-1"></i> AMOUNT</th>
+                  <th scope="col" class="header-cell"><i class="bi bi-tag me-1"></i> STATUS</th>
                   <th scope="col" class="header-cell"><i class="bi bi-gear me-1"></i> ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let order of orders" class="order-row">
+                <tr *ngFor="let order of filteredOrders" class="order-row">
                   <td><span class="fw-bold">#{{ order.id }}</span></td>
                   <td>{{ order.orderDate | date:'dd.MM.yyyy HH:mm' }}</td>
                   <td>
@@ -63,18 +85,6 @@
                     </span>
                   </td>
                   <td>
-                    <span class="status-badge" [ngClass]="getPaymentStatusClass(order.paymentStatus)">
-                      <i class="bi" [ngClass]="{
-                        'bi-hourglass-split': order.paymentStatus === 'PENDING',
-                        'bi-check-circle-fill': order.paymentStatus === 'PAID',
-                        'bi-arrow-left-right': order.paymentStatus === 'REFUNDED',
-                        'bi-x-circle-fill': order.paymentStatus === 'FAILED'
-                      }"></i>
-                      {{ order.paymentStatus }}
-                    </span>
-                    <div class="text-muted small mt-1">{{ order.paymentMethod }}</div>
-                  </td>
-                  <td>
                     <div class="btn-group">
                       <button class="btn btn-sm btn-primary" title="View Details" (click)="openOrderDetails(order)">
                         <i class="bi bi-eye-fill"></i>
@@ -91,7 +101,7 @@
               </tbody>
             </table>
             
-            <div *ngIf="orders.length === 0" class="empty-state my-5 text-center">
+            <div *ngIf="filteredOrders.length === 0" class="empty-state my-5 text-center">
               <i class="bi bi-inbox-fill display-1 text-muted"></i>
               <h5 class="mt-3">No orders found</h5>
               <p class="text-muted">Orders will appear here when they are created.</p>
@@ -121,10 +131,6 @@
             <p><strong>Status:</strong> 
               <span class="status-badge" [ngClass]="getStatusClass(selectedOrder.status)">{{ selectedOrder.status }}</span>
             </p>
-            <p><strong>Payment Status:</strong> 
-              <span class="status-badge" [ngClass]="getPaymentStatusClass(selectedOrder.paymentStatus)">{{ selectedOrder.paymentStatus }}</span>
-            </p>
-            <p><strong>Payment Method:</strong> {{ selectedOrder.paymentMethod }}</p>
             <p><strong>Total Amount:</strong> {{ selectedOrder.totalAmount | currency:'₺' }}</p>
           </div>
           <div class="col-md-6">
@@ -211,14 +217,6 @@
             <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
           </select>
           <small class="form-text text-muted">Current status: {{ updatingOrder.status }}</small>
-        </div>
-        
-        <div class="mb-3">
-          <label for="paymentStatus" class="form-label">Payment Status</label>
-          <select class="form-select" id="paymentStatus" [(ngModel)]="newPaymentStatus" name="paymentStatus">
-            <option *ngFor="let status of paymentStatusOptions" [value]="status">{{ status }}</option>
-          </select>
-          <small class="form-text text-muted">Current payment status: {{ updatingOrder.paymentStatus }}</small>
         </div>
       </form>
     </div>
