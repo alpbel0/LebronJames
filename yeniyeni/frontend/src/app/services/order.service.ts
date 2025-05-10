@@ -209,7 +209,7 @@ export class OrderService {
     
     return this.http.put<OrderResponse>(
       `${this.apiUrl}/seller/${sellerId}/order/${orderId}/status`,
-      `"${newStatus}"`,
+      { status: newStatus },
       { headers }
     ).pipe(catchError(this.handleError));
   }

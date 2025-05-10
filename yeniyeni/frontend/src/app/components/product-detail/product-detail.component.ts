@@ -14,7 +14,7 @@ import { User } from '../../models/user.model';
 @Component({
   selector: 'app-product-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink],
   templateUrl: './product-detail.component.html',
   styleUrls: ['./product-detail.component.css']
 })
