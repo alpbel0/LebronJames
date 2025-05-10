@@ -6,6 +6,7 @@ import { AuthService } from '../../services/auth.service';
 import { UserProfileService, Address } from '../../services/user-profile.service';
 import { User, UserRole } from '../../models/user.model';
 import { AlertService } from '../../services/alert.service';
+import { OrderService, OrderResponse } from '../../services/order.service';
 
 @Component({
   selector: 'app-profile',
@@ -51,10 +52,19 @@ export class ProfileComponent implements OnInit {
   showingAddressForm: boolean = false;
   editingAddress: boolean = false;
 
+  // Siparişler için değişkenler
+  orders: OrderResponse[] = [];
+  loadingOrders: boolean = false;
+  
+  // Sipariş detayları için değişkenler
+  selectedOrder: OrderResponse | null = null;
+  showOrderDetails: boolean = false;
+
   constructor(
     private authService: AuthService,
     private profileService: UserProfileService,
     private alertService: AlertService,
+    private orderService: OrderService,
     private route: ActivatedRoute
   ) {}
 
@@ -72,6 +82,11 @@ export class ProfileComponent implements OnInit {
     // Adres listesini başlangıçta yükle
     setTimeout(() => {
       this.loadAddresses();
+      
+      // Siparişleri yükle
+      if (this.activeSection === 'orders') {
+        this.loadOrders();
+      }
     }, 1000);
   }
 
@@ -79,6 +94,11 @@ export class ProfileComponent implements OnInit {
   setActiveSection(section: string): void {
     this.activeSection = section;
     this.activeTab = section; // Yeni sekme değişkenini güncelle
+    
+    // Orders sekmesi seçildiğinde siparişleri yükle
+    if (section === 'orders') {
+      this.loadOrders();
+    }
   }
 
   // Yeni sekme değiştirme yöntemi (HTML'de kullanılıyor)
@@ -506,5 +526,63 @@ export class ProfileComponent implements OnInit {
         console.error('Varsayılan adres güncelleme hatası:', err);
       }
     });
+  }
+
+  // Kullanıcının siparişlerini getir
+  loadOrders(): void {
+    if (!this.currentUser || !this.currentUser.id) {
+      return;
+    }
+    
+    this.loadingOrders = true;
+    this.orders = [];
+    
+    this.orderService.getUserOrders().subscribe({
+      next: (orders) => {
+        this.orders = orders;
+        this.loadingOrders = false;
+      },
+      error: (err) => {
+        console.error('Siparişler yüklenirken hata:', err);
+        this.loadingOrders = false;
+        this.alertService.error('Siparişleriniz yüklenemedi: ' + (err.message || 'Bilinmeyen hata'));
+      }
+    });
+  }
+
+  // Sipariş iptal etme
+  cancelOrder(orderId: number): void {
+    if (!confirm('Bu siparişi iptal etmek istediğinize emin misiniz?')) {
+      return;
+    }
+    
+    this.loadingOrders = true;
+    
+    this.orderService.cancelOrder(orderId).subscribe({
+      next: (result) => {
+        this.loadingOrders = false;
+        this.alertService.success('Sipariş başarıyla iptal edildi');
+        
+        // Güncel sipariş listesini yeniden yükle
+        this.loadOrders();
+      },
+      error: (err) => {
+        this.loadingOrders = false;
+        console.error('Sipariş iptal edilirken hata:', err);
+        this.alertService.error('Sipariş iptal edilemedi: ' + (err.message || 'Bilinmeyen hata'));
+      }
+    });
+  }
+  
+  // Sipariş detaylarını gösterme
+  showOrderDetail(order: OrderResponse): void {
+    this.selectedOrder = order;
+    this.showOrderDetails = true;
+  }
+  
+  // Sipariş detay penceresini kapatma
+  closeOrderDetails(): void {
+    this.selectedOrder = null;
+    this.showOrderDetails = false;
   }
 }

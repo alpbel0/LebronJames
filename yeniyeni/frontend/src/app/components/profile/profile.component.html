@@ -128,8 +128,56 @@
       <div *ngIf="activeSection === 'orders'">
         <h3>Siparişlerim</h3>
         <div class="orders-section">
-          <p>Siparişleriniz burada görüntülenecektir. Şu anda siparişleriniz yükleniyor veya hiç sipariş yok.</p>
-          <div class="no-orders-message">
+          <!-- Yükleniyor göstergesi -->
+          <div class="loading-indicator" *ngIf="loadingOrders">
+            <div class="spinner"></div>
+            <p>Siparişleriniz yükleniyor...</p>
+          </div>
+          
+          <!-- Sipariş Listesi -->
+          <div class="orders-list" *ngIf="!loadingOrders && orders.length > 0">
+            <div class="order-card" *ngFor="let order of orders">
+              <div class="order-header">
+                <div class="order-number">
+                  <span>Sipariş #{{ order.orderNumber }}</span>
+                </div>
+                <div class="order-date">
+                  <span>{{ order.createdAt | date:'dd.MM.yyyy' }}</span>
+                </div>
+                <div class="order-status" [ngClass]="order.status.toLowerCase()">
+                  <span>{{ order.status }}</span>
+                </div>
+              </div>
+              
+              <div class="order-details">
+                <div class="order-items">
+                  <div class="item" *ngFor="let item of order.items">
+                    <div class="item-image" *ngIf="item.productImage">
+                      <img [src]="item.productImage" [alt]="item.productName">
+                    </div>
+                    <div class="item-details">
+                      <p class="item-name">{{ item.productName }}</p>
+                      <p class="item-price">₺{{ item.price | number:'1.2-2' }} x {{ item.quantity }}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="order-summary">
+                  <p><strong>Toplam:</strong> ₺{{ order.totalAmount | number:'1.2-2' }}</p>
+                  <p><strong>Durum:</strong> {{ order.status }}</p>
+                  <p><strong>Ödeme Durumu:</strong> {{ order.paymentStatus }}</p>
+                </div>
+              </div>
+              
+              <div class="order-actions">
+                <button class="btn btn-sm" (click)="showOrderDetail(order)">Detaylar</button>
+                <button *ngIf="order.status === 'PENDING'" class="btn btn-sm btn-danger" (click)="cancelOrder(order.id)">İptal Et</button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Sipariş bulunamadı mesajı -->
+          <div class="no-orders-message" *ngIf="!loadingOrders && orders.length === 0">
             <i class="fas fa-shopping-bag"></i>
             <p>Henüz siparişiniz bulunmuyor</p>
             <a routerLink="/products" class="btn btn-primary">Alışverişe Başla</a>
@@ -285,6 +333,78 @@
   <div class="not-logged-in" *ngIf="!currentUser && !loading">
     <p>Bu sayfayı görüntülemek için giriş yapmalısınız.</p>
     <a [routerLink]="['/login']" class="btn">Giriş Yap</a>
+  </div>
+
+  <!-- Sipariş Detayları Modal -->
+  <div class="order-details-modal" *ngIf="showOrderDetails && selectedOrder">
+    <div class="modal-backdrop" (click)="closeOrderDetails()"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Sipariş Detayları</h3>
+        <button class="close-button" (click)="closeOrderDetails()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="order-info">
+          <p><strong>Sipariş No:</strong> {{ selectedOrder.orderNumber }}</p>
+          <p><strong>Sipariş ID:</strong> {{ selectedOrder.id }}</p>
+          <p><strong>Tarih:</strong> {{ selectedOrder.createdAt | date:'dd.MM.yyyy HH:mm' }}</p>
+          <p><strong>Durum:</strong> <span [ngClass]="selectedOrder.status.toLowerCase()">{{ selectedOrder.status }}</span></p>
+          <p><strong>Ödeme Durumu:</strong> {{ selectedOrder.paymentStatus }}</p>
+        </div>
+        
+        <div class="seller-info" *ngFor="let item of selectedOrder.items">
+          <p *ngIf="item.sellerId"><strong>Satıcı ID:</strong> {{ item.sellerId }}</p>
+        </div>
+        
+        <div class="address-info">
+          <h4>Teslimat Adresi</h4>
+          <div class="address-card" *ngIf="selectedOrder.shippingAddress">
+            <p><strong>{{ selectedOrder.shippingAddress.recipientName }}</strong></p>
+            <p>{{ selectedOrder.shippingAddress.addressLine1 }}</p>
+            <p *ngIf="selectedOrder.shippingAddress.addressLine2">{{ selectedOrder.shippingAddress.addressLine2 }}</p>
+            <p>{{ selectedOrder.shippingAddress.state ? selectedOrder.shippingAddress.state + ', ' : '' }}{{ selectedOrder.shippingAddress.city }}, {{ selectedOrder.shippingAddress.postalCode }}</p>
+            <p>{{ selectedOrder.shippingAddress.country }}</p>
+            <p *ngIf="selectedOrder.shippingAddress.phoneNumber">Tel: {{ selectedOrder.shippingAddress.phoneNumber }}</p>
+          </div>
+        </div>
+        
+        <div class="items-list">
+          <h4>Sipariş Ürünleri</h4>
+          <div class="item" *ngFor="let item of selectedOrder.items">
+            <div class="item-image" *ngIf="item.productImage">
+              <img [src]="item.productImage" [alt]="item.productName">
+            </div>
+            <div class="item-details">
+              <p class="item-name">{{ item.productName }}</p>
+              <p class="item-price">₺{{ item.price | number:'1.2-2' }} x {{ item.quantity }}</p>
+              <p class="item-total">Toplam: ₺{{ item.subtotal | number:'1.2-2' }}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="price-summary">
+          <div class="summary-item">
+            <span>Ara Toplam:</span>
+            <span>₺{{ selectedOrder.totalPrice | number:'1.2-2' }}</span>
+          </div>
+          <div class="summary-item" *ngIf="selectedOrder.discountAmount && selectedOrder.discountAmount > 0">
+            <span>İndirim:</span>
+            <span>-₺{{ selectedOrder.discountAmount | number:'1.2-2' }}</span>
+          </div>
+          <div class="summary-item">
+            <span>Kargo:</span>
+            <span>₺{{ selectedOrder.shippingPrice | number:'1.2-2' }}</span>
+          </div>
+          <div class="summary-item total">
+            <span>Toplam:</span>
+            <span>₺{{ selectedOrder.totalAmount | number:'1.2-2' }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" (click)="closeOrderDetails()">Kapat</button>
+      </div>
+    </div>
   </div>
 </div>
 
