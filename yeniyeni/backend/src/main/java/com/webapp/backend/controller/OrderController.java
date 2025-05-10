@@ -1,11 +1,13 @@
 package com.webapp.backend.controller;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,7 +30,9 @@ import com.webapp.backend.model.Order;
 import com.webapp.backend.model.OrderItem;
 import com.webapp.backend.model.OrderStatus;
 import com.webapp.backend.model.PaymentStatus;
+import com.webapp.backend.model.Product;
 import com.webapp.backend.model.User;
+import com.webapp.backend.repository.ProductRepository;
 import com.webapp.backend.service.AddressService;
 import com.webapp.backend.service.CartService;
 import com.webapp.backend.service.CouponService;
@@ -54,6 +58,9 @@ public class OrderController {
     
     @Autowired
     private CouponService couponService;
+    
+    @Autowired
+    private ProductRepository productRepository;
     
     /**
      * Sepetten doğrudan sipariş oluşturma endpoint'i (Stripe entegrasyonu için)
@@ -210,55 +217,77 @@ public class OrderController {
     
     /**
      * Sipariş durumunu güncelleme endpoint'i (Admin için)
+     * String olarak gelen durum değerini OrderStatus enum'a çevirir
      */
-    @PutMapping("/{orderId}/status")
+    @PutMapping(value = "/{orderId}/status", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<OrderResponseDto> updateOrderStatus(
             @PathVariable Long orderId,
-            @RequestBody OrderStatus status) {
+            @RequestBody String statusValue) {
         
-        // Siparişi bul
-        Order order = orderService.getOrderById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
-        
-        // Durumu güncelle
-        order.setStatus(status);
-        order = orderService.updateOrder(order);
-        
-        // OrderResponseDto'ya dönüştür
-        OrderResponseDto orderDto = convertToDto(order);
-        return ResponseEntity.ok(orderDto);
+        try {
+            // Gelen string değeri temizle (tırnak işaretlerini kaldır)
+            statusValue = statusValue.replace("\"", "");
+            
+            // Enum değerine çevir
+            OrderStatus status = OrderStatus.valueOf(statusValue);
+            
+            // Siparişi bul
+            Order order = orderService.getOrderById(orderId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+            
+            // Durumu güncelle
+            order.setStatus(status);
+            order = orderService.updateOrder(order);
+            
+            // OrderResponseDto'ya dönüştür
+            OrderResponseDto orderDto = convertToDto(order);
+            return ResponseEntity.ok(orderDto);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid order status: " + statusValue);
+        }
     }
     
     /**
      * Ödeme durumunu güncelleme endpoint'i (Admin veya ödeme işlemi için)
+     * String olarak gelen durum değerini PaymentStatus enum'a çevirir
      */
-    @PutMapping("/{orderId}/payment")
+    @PutMapping(value = "/{orderId}/payment", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<OrderResponseDto> updatePaymentStatus(
             @PathVariable Long orderId,
-            @RequestBody PaymentStatus newStatus) {
+            @RequestBody String statusValue) {
         
-        // Siparişi bul
-        Optional<Order> orderOpt = orderService.getOrderById(orderId);
-        if (!orderOpt.isPresent()) {
-            throw new ResourceNotFoundException("Order", "id", orderId);
+        try {
+            // Gelen string değeri temizle (tırnak işaretlerini kaldır)
+            statusValue = statusValue.replace("\"", "");
+            
+            // Enum değerine çevir
+            PaymentStatus newStatus = PaymentStatus.valueOf(statusValue);
+            
+            // Siparişi bul
+            Optional<Order> orderOpt = orderService.getOrderById(orderId);
+            if (!orderOpt.isPresent()) {
+                throw new ResourceNotFoundException("Order", "id", orderId);
+            }
+            
+            Order order = orderOpt.get();
+            
+            // İptal edilmiş siparişlerde ödeme durumu değiştirilemez
+            if (order.getStatus() == OrderStatus.CANCELLED) {
+                throw new OrderException(
+                    "İptal edilmiş siparişlerde ödeme durumu değiştirilemez", 
+                    ErrorCodes.ORDER_INVALID_STATUS
+                );
+            }
+            
+            // Ödeme durumunu güncelle
+            Order updatedOrder = orderService.updatePaymentStatus(order, newStatus);
+            
+            // OrderResponseDto'ya dönüştür
+            OrderResponseDto orderDto = convertToDto(updatedOrder);
+            return ResponseEntity.ok(orderDto);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid payment status: " + statusValue);
         }
-        
-        Order order = orderOpt.get();
-        
-        // İptal edilmiş siparişlerde ödeme durumu değiştirilemez
-        if (order.getStatus() == OrderStatus.CANCELLED) {
-            throw new OrderException(
-                "İptal edilmiş siparişlerde ödeme durumu değiştirilemez", 
-                ErrorCodes.ORDER_INVALID_STATUS
-            );
-        }
-        
-        // Ödeme durumunu güncelle
-        Order updatedOrder = orderService.updatePaymentStatus(order, newStatus);
-        
-        // OrderResponseDto'ya dönüştür
-        OrderResponseDto orderDto = convertToDto(updatedOrder);
-        return ResponseEntity.ok(orderDto);
     }
     
     /**
@@ -315,6 +344,71 @@ public class OrderController {
                 .collect(Collectors.toList());
         
         return ResponseEntity.ok(orderDtos);
+    }
+    
+    /**
+     * Tüm siparişleri getiren endpoint (Admin için)
+     */
+    @GetMapping("/all")
+    public ResponseEntity<List<OrderResponseDto>> getAllOrders() {
+        // Tüm siparişleri getir
+        List<Order> orders = orderService.getAllOrders();
+        
+        // OrderResponseDto listesine dönüştür
+        List<OrderResponseDto> orderDtos = orders.stream()
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
+        
+        return ResponseEntity.ok(orderDtos);
+    }
+    
+    /**
+     * Satıcının sipariş durumunu güncellemesini sağlayan endpoint
+     * Satıcı sadece kendi ürünlerini içeren siparişleri güncelleyebilir
+     */
+    @PutMapping(value = "/seller/{sellerId}/order/{orderId}/status", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> updateOrderStatusBySeller(
+            @PathVariable Long sellerId,
+            @PathVariable Long orderId,
+            @RequestBody String statusValue) {
+        
+        try {
+            // Satıcıyı bul
+            User seller = userService.findById(sellerId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Seller", "id", sellerId));
+            
+            // Siparişi bul
+            Order order = orderService.getOrderById(orderId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+            
+            // Satıcının ürünlerini bul
+            List<Product> sellerProducts = productRepository.findBySeller(seller);
+            
+            // Siparişin satıcının ürünlerini içerip içermediğini kontrol et
+            boolean containsSellerProducts = order.getOrderItems().stream()
+                    .anyMatch(item -> sellerProducts.contains(item.getProduct()));
+            
+            if (!containsSellerProducts) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body("Bu sipariş sizin ürünlerinizi içermiyor.");
+            }
+            
+            // Gelen string değeri temizle (tırnak işaretlerini kaldır)
+            statusValue = statusValue.replace("\"", "");
+            
+            // Enum değerine çevir
+            OrderStatus status = OrderStatus.valueOf(statusValue);
+            
+            // Durumu güncelle
+            order.setStatus(status);
+            order = orderService.updateOrder(order);
+            
+            // OrderResponseDto'ya dönüştür
+            OrderResponseDto orderDto = convertToDto(order);
+            return ResponseEntity.ok(orderDto);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid order status: " + statusValue);
+        }
     }
     
     /**

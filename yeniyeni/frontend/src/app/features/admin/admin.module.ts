@@ -5,6 +5,7 @@ import { AdminDashboardComponent } from './components/admin-dashboard/admin-dash
 import { ProductManagementComponent } from './components/product-management/product-management.component';
 import { UserManagementComponent } from './components/user-management/user-management.component';
 import { CategoryManagementComponent } from './components/category-management/category-management.component';
+import { OrderManagementComponent } from './components/order-management/order-management.component';
 import { ReactiveFormsModule } from '@angular/forms';
 
 const routes: Routes = [
@@ -15,7 +16,8 @@ const routes: Routes = [
       { path: '', redirectTo: 'products', pathMatch: 'full' },
       { path: 'products', component: ProductManagementComponent },
       { path: 'users', component: UserManagementComponent },
-      { path: 'categories', component: CategoryManagementComponent }
+      { path: 'categories', component: CategoryManagementComponent },
+      { path: 'orders', component: OrderManagementComponent }
     ]
   }
 ];
@@ -24,11 +26,7 @@ const routes: Routes = [
   imports: [
     CommonModule,
     RouterModule.forChild(routes),
-    ReactiveFormsModule,
-    AdminDashboardComponent,
-    ProductManagementComponent,
-    UserManagementComponent,
-    CategoryManagementComponent
+    ReactiveFormsModule
   ]
 })
 export class AdminModule { }

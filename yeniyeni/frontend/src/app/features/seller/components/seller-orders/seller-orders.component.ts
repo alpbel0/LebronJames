@@ -1,12 +1,13 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { OrderService, OrderResponse, OrderItem } from '../../../../services/order.service';
 import { AuthService } from '../../../../services/auth.service';
 
 @Component({
   selector: 'app-seller-orders',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="seller-orders">
       <div class="content-header">
@@ -56,7 +57,14 @@ import { AuthService } from '../../../../services/auth.service';
                 </span>
               </td>
               <td>
-                <button class="btn-details" (click)="showOrderDetails(order)">Detayları Göster</button>
+                <div class="btn-group">
+                  <button class="btn-details" (click)="showOrderDetails(order)">
+                    <i class="bi bi-eye-fill"></i> Detaylar
+                  </button>
+                  <button class="btn-update" (click)="openUpdateStatus(order)">
+                    <i class="bi bi-pencil-fill"></i> Durum
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -102,7 +110,7 @@ import { AuthService } from '../../../../services/auth.service';
             <p><strong>Durum:</strong> <span class="status-badge-sm" [ngClass]="getStatusClass(selectedOrder.status)">{{ selectedOrder.status }}</span></p>
             <p><strong>Ödeme Yöntemi:</strong> {{ selectedOrder.paymentMethod }}</p>
             <p><strong>Toplam Tutar (Sizin Ürünler):</strong> {{ getSellerSubtotal(selectedOrder) | currency:'₺' }}</p>
-            <p><strong>Sipariş Genel Toplamı:</strong> {{ selectedOrder.totalPrice | currency:'₺' }}</p>
+            <p><strong>Sipariş Genel Toplamı:</strong> {{ selectedOrder.totalAmount | currency:'₺' }}</p>
           </div>
           
           <div class="detail-section">
@@ -132,6 +140,39 @@ import { AuthService } from '../../../../services/auth.service';
         
         <div class="modal-footer">
           <button class="btn-close-modal" (click)="selectedOrder = null">Kapat</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Durum Güncelleme Modal -->
+    <div class="modal-backdrop" *ngIf="showUpdateModal" (click)="closeModal($event)"></div>
+    <div class="modal-container" *ngIf="showUpdateModal">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>Sipariş Durumunu Güncelle #{{ updatingOrder?.id }}</h3>
+          <button class="btn-close" (click)="closeModal($event)">&times;</button>
+        </div>
+        <div class="modal-body" *ngIf="updatingOrder">
+          <div *ngIf="updateError" class="alert-error">
+            {{ updateError }}
+          </div>
+          
+          <form>
+            <div class="form-group">
+              <label for="orderStatus">Sipariş Durumu</label>
+              <select class="form-select" id="orderStatus" [(ngModel)]="newStatus" name="orderStatus">
+                <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
+              </select>
+              <small class="form-info">Mevcut durum: {{ updatingOrder.status }}</small>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeModal($event)">İptal</button>
+          <button class="btn-primary" (click)="updateOrderStatus()" [disabled]="updateLoading">
+            <span *ngIf="updateLoading" class="loading-spinner"></span>
+            Kaydet
+          </button>
         </div>
       </div>
     </div>
@@ -251,23 +292,53 @@ import { AuthService } from '../../../../services/auth.service';
       color: #F44336;
     }
 
-    .btn-details {
+    .btn-group {
+      display: flex;
+      gap: 5px;
+    }
+
+    .btn-details, .btn-update {
       padding: 6px 12px;
-      background-color: #f0f0f0;
       border: none;
       border-radius: 4px;
-      color: #333;
       cursor: pointer;
       font-size: 13px;
       transition: all 0.2s;
+    }
+
+    .btn-details {
+      background-color: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-update {
+      background-color: #e3f2fd;
+      color: #2196F3;
     }
 
     .btn-details:hover {
       background-color: #e0e0e0;
     }
 
+    .btn-update:hover {
+      background-color: #bbdefb;
+    }
+
     /* Modal Styles */
     .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal-container {
       position: fixed;
       top: 0;
       left: 0;
@@ -410,6 +481,90 @@ import { AuthService } from '../../../../services/auth.service';
     .btn-close-modal:hover {
       background-color: #e0e0e0;
     }
+
+    /* Form Styles */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #555;
+    }
+
+    .form-select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .form-info {
+      display: block;
+      margin-top: 6px;
+      font-size: 12px;
+      color: #888;
+    }
+
+    .alert-error {
+      padding: 12px;
+      background-color: #feebee;
+      color: #f44336;
+      border-radius: 4px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .btn-primary, .btn-secondary {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background-color: #2196F3;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background-color: #1976D2;
+    }
+
+    .btn-primary:disabled {
+      background-color: #90CAF9;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background-color: #f0f0f0;
+      color: #333;
+      margin-right: 8px;
+    }
+
+    .btn-secondary:hover {
+      background-color: #e0e0e0;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 0.8s linear infinite;
+      margin-right: 6px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   `]
 })
 export class SellerOrdersComponent implements OnInit {
@@ -419,6 +574,14 @@ export class SellerOrdersComponent implements OnInit {
   selectedOrder: OrderResponse | null = null;
   currentSellerId: number | null = null;
 
+  // Durum güncelleme için değişkenler
+  showUpdateModal = false;
+  updatingOrder: OrderResponse | null = null;
+  newStatus: string = '';
+  statusOptions: string[] = [];
+  updateLoading = false;
+  updateError: string | null = null;
+
   constructor(
     private orderService: OrderService,
     private authService: AuthService
@@ -427,6 +590,7 @@ export class SellerOrdersComponent implements OnInit {
   ngOnInit(): void {
     this.currentSellerId = this.authService.getCurrentUserId();
     this.loadOrders();
+    this.statusOptions = this.orderService.getOrderStatuses();
   }
 
   loadOrders(): void {
@@ -478,7 +642,15 @@ export class SellerOrdersComponent implements OnInit {
   }
 
   getStatusClass(status: string): string {
-    return 'status-' + status.toLowerCase();
+    switch (status) {
+      case 'PENDING': return 'status-pending';
+      case 'PROCESSING': return 'status-processing';
+      case 'SHIPPED': return 'status-shipped';
+      case 'DELIVERED': return 'status-delivered';
+      case 'CANCELLED': return 'status-cancelled';
+      case 'RETURNED': return 'status-returned';
+      default: return '';
+    }
   }
 
   showOrderDetails(order: OrderResponse): void {
@@ -486,8 +658,14 @@ export class SellerOrdersComponent implements OnInit {
   }
 
   closeModal(event: MouseEvent): void {
-    if ((event.target as HTMLElement).className === 'modal-overlay') {
+    if (event.target instanceof HTMLElement && 
+        (event.target.className === 'modal-overlay' || 
+         event.target.className === 'modal-container' || 
+         event.target.className === 'btn-close')) {
       this.selectedOrder = null;
+      this.showUpdateModal = false;
+      this.updatingOrder = null;
+      this.updateError = null;
     }
   }
   
@@ -521,5 +699,37 @@ export class SellerOrdersComponent implements OnInit {
       (sum, item) => sum + (item.subtotal || (item.price * item.quantity)), 
       0
     );
+  }
+
+  /**
+   * Durum güncelleme modalını açar
+   */
+  openUpdateStatus(order: OrderResponse): void {
+    this.updatingOrder = order;
+    this.newStatus = order.status;
+    this.showUpdateModal = true;
+  }
+
+  /**
+   * Sipariş durumunu günceller
+   */
+  updateOrderStatus(): void {
+    if (!this.updatingOrder) return;
+    
+    this.updateLoading = true;
+    this.updateError = null;
+    
+    this.orderService.updateOrderStatusBySeller(this.updatingOrder.id, this.newStatus).subscribe({
+      next: () => {
+        this.updateLoading = false;
+        this.showUpdateModal = false;
+        this.updatingOrder = null;
+        this.loadOrders(); // Siparişleri yeniden yükle
+      },
+      error: (err: Error) => {
+        this.updateError = `Durum güncellenirken hata oluştu: ${err.message}`;
+        this.updateLoading = false;
+      }
+    });
   }
 } 

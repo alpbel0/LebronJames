@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
 import { AuthService } from './auth.service';
 
 export interface OrderRequest {
@@ -38,6 +38,7 @@ export interface OrderResponse {
   paymentStatus: string;
   createdAt: string;
   updatedAt: string;
+  orderDate?: string;
   items: OrderItem[];
   shippingAddress: any;
   billingAddress?: any;
@@ -142,6 +143,75 @@ export class OrderService {
 
     return this.http.get<OrderResponse[]>(`${this.apiUrl}/seller/${userId}`)
       .pipe(catchError(this.handleError));
+  }
+
+  /**
+   * Admin için tüm siparişleri getir
+   */
+  getAllOrders(): Observable<OrderResponse[]> {
+    return this.http.get<OrderResponse[]>(`${this.apiUrl}/all`)
+      .pipe(
+        map(orders => orders.map(order => ({
+          ...order,
+          // Backend ve frontend model uyumsuzluğunu gider
+          // orderDate varsa kullan, yoksa createdAt'i kullan
+          orderDate: order.orderDate || order.createdAt
+        }))),
+        catchError(this.handleError)
+      );
+  }
+
+  /**
+   * Sipariş durumunu güncelle (Admin için)
+   */
+  updateOrderStatus(orderId: number, newStatus: string): Observable<OrderResponse> {
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json'
+    });
+    
+    // Strateji değiştiriyoruz: Tüm durum değerlerini sade string olarak gönderelim
+    return this.http.put<OrderResponse>(
+      `${this.apiUrl}/${orderId}/status`, 
+      `"${newStatus}"`,  // PENDING -> "PENDING" şeklinde sade string 
+      { headers }
+    ).pipe(catchError(this.handleError));
+  }
+
+  /**
+   * Ödeme durumunu güncelle (Admin için)
+   */
+  updatePaymentStatus(orderId: number, newStatus: string): Observable<OrderResponse> {
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json'
+    });
+    
+    // Strateji değiştiriyoruz: Tüm durum değerlerini sade string olarak gönderelim
+    return this.http.put<OrderResponse>(
+      `${this.apiUrl}/${orderId}/payment`, 
+      `"${newStatus}"`,  // PAID -> "PAID" şeklinde sade string
+      { headers }
+    ).pipe(catchError(this.handleError));
+  }
+
+  /**
+   * Satıcı olarak bir siparişin durumunu güncelle
+   * Satıcı sadece kendi ürünlerini içeren siparişleri güncelleyebilir
+   */
+  updateOrderStatusBySeller(orderId: number, newStatus: string): Observable<OrderResponse> {
+    const sellerId = this.authService.getCurrentUserId();
+    if (!sellerId) {
+      return throwError(() => new Error('Satıcı ID bulunamadı'));
+    }
+    
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json'
+    });
+    
+    return this.http.put<OrderResponse>(
+      `${this.apiUrl}/seller/${sellerId}/order/${orderId}/status`,
+      `"${newStatus}"`,
+      { headers }
+    ).pipe(catchError(this.handleError));
   }
 
   private handleError(error: HttpErrorResponse) {

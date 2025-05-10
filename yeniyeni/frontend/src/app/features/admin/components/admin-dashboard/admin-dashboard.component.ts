@@ -23,6 +23,10 @@ import { RouterModule, RouterLinkActive } from '@angular/router';
           <i class="nav-icon">🏷️</i>
           <span>Categories</span>
         </a>
+        <a routerLink="./orders" routerLinkActive="active">
+          <i class="nav-icon">📋</i>
+          <span>Orders</span>
+        </a>
       </nav>
       <div class="admin-content">
         <router-outlet></router-outlet>

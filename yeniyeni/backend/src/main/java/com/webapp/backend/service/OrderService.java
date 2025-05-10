@@ -172,4 +172,11 @@ public class OrderService {
     public Order updateOrder(Order order) {
         return orderRepository.save(order);
     }
+
+    /**
+     * Tüm siparişleri getir (Admin için)
+     */
+    public List<Order> getAllOrders() {
+        return orderRepository.findAll();
+    }
 } 
